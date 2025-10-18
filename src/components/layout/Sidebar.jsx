@@ -1,29 +1,21 @@
 // src/components/layout/Sidebar.jsx
-
-import { Link } from 'react-router-dom';
+import { Link } from "react-router-dom";
 
 const Sidebar = () => {
   return (
-    // La clase `flex` aquí asegura que la barra lateral siempre se vea.
-    <div className="bg-gray-800 text-white w-64 min-h-screen p-4 flex flex-col gap-4">
-      <div className="text-2xl font-bold mb-4">Panel Admin</div>
-      <Link to="/dashboard/areas" className="hover:bg-gray-700 p-2 rounded-lg transition duration-200">
-        Administrar Áreas
-      </Link>
-      <Link to="/dashboard/oficinas" className="hover:bg-gray-700 p-2 rounded-lg transition duration-200">
-        Administrar Oficinas
-      </Link>
-      <Link to="/dashboard/empleados" className="hover:bg-gray-700 p-2 rounded-lg transition duration-200">
-        Administrar Empleados
-      </Link>
-      <Link to="/dashboard/salones" className="hover:bg-gray-700 p-2 rounded-lg transition duration-200">
-        Administrar Salones
-      </Link>
-      <hr className="my-2 border-gray-600" />
-      <Link to="/dashboard/reportes" className="hover:bg-gray-700 p-2 rounded-lg transition duration-200">
-        Ver Reporte
-      </Link>
-    </div>
+    <nav className="h-full p-6 flex flex-col">
+      <div className="text-2xl font-bold mb-6">Panel Admin</div>
+
+      <ul className="flex-1 space-y-4">
+        <li><Link to="/dashboard/areas" className="text-blue-300 hover:text-white">Administrar Áreas</Link></li>
+        <li><Link to="/dashboard/oficinas" className="text-blue-300 hover:text-white">Administrar Oficinas</Link></li>
+        <li><Link to="/dashboard/empleados" className="text-blue-300 hover:text-white">Administrar Empleados</Link></li>
+        <li><Link to="/dashboard/salones" className="text-blue-300 hover:text-white">Administrar Salones</Link></li>
+      </ul>
+
+      <hr className="border-gray-600 my-4" />
+      <div><Link to="/dashboard/reportes" className="text-blue-300 hover:text-white">Ver Reporte</Link></div>
+    </nav>
   );
 };
 

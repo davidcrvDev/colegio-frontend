@@ -1,5 +1,4 @@
 // src/App.jsx
-
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import AppLayout from './components/layout/AppLayout';
@@ -15,7 +14,6 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/dashboard" element={<AppLayout />}>
-          <Route index element={<AreasPage />} />
           <Route path="areas" element={<AreasPage />} />
           <Route path="oficinas" element={<OficinasPage />} />
           <Route path="empleados" element={<EmpleadosPage />} />
