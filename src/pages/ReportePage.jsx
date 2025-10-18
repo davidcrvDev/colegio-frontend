@@ -1,42 +1,105 @@
 // src/pages/ReportePage.jsx
 
-import React, { useState, useEffect } from "react";
-import { getReporte, downloadReporteXLSX } from "../services/reportes.service";
+import React from "react";
+// 🚨 Importamos los hooks de React Query
+import { useQuery } from "@tanstack/react-query";
+import { graphqlFetcher } from "../services/graphqlFetcher";
+import { gql } from "graphql-tag"; 
+// Mantendremos downloadReporteXLSX, ya que probablemente NO usa la red directamente
+// import { downloadReporteXLSX } from "../services/reportes.service";
+
+// ---------------------------------------------------------------------
+// 1. DEFINICIÓN DE LA QUERY GRAPHQL
+// ---------------------------------------------------------------------
+
+// Esta query solicita las Áreas, y dentro de ellas, sus Oficinas,
+// y dentro de estas, sus Empleados, todo en una sola petición.
+const GET_REPORTE_QUERY = gql`
+  query ReporteAreasEmpleados {
+    reporteAreasEmpleados {
+      id
+      nombre
+      oficinas {
+        id
+        codigo
+        nombre
+        empleados {
+          id
+          nombre
+          tipoEmpleado
+          tipoProfesor
+        }
+      }
+    }
+  }
+`;
+
+const REPORTE_QUERY_KEY = ["reporteAreasEmpleados"];
+// ---------------------------------------------------------------------
 
 const ReportePage = () => {
-  const [reporteData, setReporteData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // Eliminamos el estado local 'reporteData', 'loading', 'error'
+  
+  // -------------------------------------------------------------------
+  // A. USE QUERY (LECTURA DE DATOS)
+  // -------------------------------------------------------------------
 
-  const fetchReporte = async () => {
-    try {
-      const data = await getReporte();
-      setReporteData(data);
-    } catch (err) {
-      setError("No se pudo cargar el reporte. Intente de nuevo.");
-      console.error(err);
-    } finally {
-      setLoading(false);
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: REPORTE_QUERY_KEY,
+    queryFn: () => graphqlFetcher(GET_REPORTE_QUERY),
+    // Mapeamos los campos para compatibilidad: id -> id_*, y camelCase -> snake_case
+    select: (response) => {
+        // La respuesta del fetcher es 'data', que contiene el reporte.
+        const reporte = response.reporteAreasEmpleados || [];
+
+        return reporte.map(area => ({
+            id_area: area.id,
+            nombre: area.nombre,
+            oficinas: area.oficinas.map(oficina => ({
+                id_oficina: oficina.id,
+                codigo: oficina.codigo,
+                nombre: oficina.nombre,
+                empleados: oficina.empleados.map(empleado => ({
+                    id_empleado: empleado.id,
+                    nombre: empleado.nombre,
+                    tipo_empleado: empleado.tipoEmpleado,
+                    tipo_profesor: empleado.tipoProfesor,
+                })),
+            })),
+        }));
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchReporte();
-  }, []);
+  // -------------------------------------------------------------------
+  // 2. HANDLERS ACTUALIZADOS
+  // -------------------------------------------------------------------
+
+  const reporteData = data || [];
 
   const handleDownloadClick = () => {
+    // La función downloadReporteXLSX generalmente manipula el DOM o llama 
+    // a librerías de generación de archivos (ej: exceljs, sheetjs) y 
+    // NO hace una petición de red, por lo que la mantenemos como está.
     if (reporteData.length > 0) {
       downloadReporteXLSX(reporteData);
     }
   };
 
-  if (loading) {
+  // -------------------------------------------------------------------
+  // 3. ESTADOS DE CARGA Y ERROR CENTRALIZADOS
+  // -------------------------------------------------------------------
+
+  if (isLoading) {
     return <div className="text-center mt-8">Cargando reporte...</div>;
   }
 
-  if (error) {
-    return <div className="text-center mt-8 text-red-500">Error: {error}</div>;
+  if (isError) {
+    return <div className="text-center mt-8 text-red-500">Error: No se pudo cargar el reporte. {error.message}</div>;
   }
+
+  // -------------------------------------------------------------------
+  // 4. RENDERIZADO
+  // -------------------------------------------------------------------
 
   return (
     <div>
@@ -54,6 +117,7 @@ const ReportePage = () => {
         </p>
       ) : (
         <div className="bg-white p-6 rounded-lg shadow-md">
+          {/* Usamos reporteData del hook useQuery */}
           {reporteData.map((area) => (
             <div key={area.id_area} className="mb-8 p-4 border rounded-lg">
               <h2 className="text-2xl font-semibold text-blue-800">
@@ -87,7 +151,7 @@ const ReportePage = () => {
                             <strong>ID:</strong> {empleado.id_empleado} |{" "}
                             <strong>Tipo:</strong> {empleado.tipo_empleado}{" "}
                             {empleado.tipo_profesor &&
-                              `(${empleado.tipo_profesor})`}
+                              (`(${empleado.tipo_profesor})`)}
                           </li>
                         ))}
                       </ul>

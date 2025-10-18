@@ -1,80 +1,142 @@
-// src/pages/AreasPage.jsx (código actualizado)
+// src/pages/AreasPage.jsx
 
-import React, { useState, useEffect } from "react";
-import {
-  getAreas,
-  createArea,
-  deleteArea,
-  updateArea,
-} from "../services/areas.service";
+import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { graphqlFetcher } from "../services/graphqlFetcher";
+import { gql } from "graphql-tag";
+
 import Table from "../components/Table";
 import Form from "../components/Form";
 
-const AreasPage = () => {
-  const [areas, setAreas] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [newAreaName, setNewAreaName] = useState("");
-  const [editingArea, setEditingArea] = useState(null); // Nuevo estado para la edición
+// ---------------------------------------------------------------------
+// 1. DEFINICIÓN DE QUERIES Y MUTATIONS GRAPHQL
+// ---------------------------------------------------------------------
 
-  const fetchAreas = async () => {
-    try {
-      const areasData = await getAreas();
-      setAreas(areasData);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+const GET_AREAS_QUERY = gql`
+  query GetAreas {
+    areas {
+      idArea
+      nombre
     }
-  };
+  }
+`;
 
-  useEffect(() => {
-    fetchAreas();
-  }, []);
+const CREATE_AREA_MUTATION = gql`
+  mutation CreateArea($data: AreaInput!) {
+    createArea(data: $data) {
+      idArea
+      nombre
+    }
+  }
+`;
+
+const UPDATE_AREA_MUTATION = gql`
+  mutation UpdateArea($id: Int!, $data: AreaInput!) {
+    updateArea(id: $id, data: $data) {
+      idArea
+      nombre
+    }
+  }
+`;
+
+const DELETE_AREA_MUTATION = gql`
+  mutation DeleteArea($id: Int!) {
+    deleteArea(id: $id)
+  }
+`;
+
+const QUERY_KEY = ["areas"];
+// ---------------------------------------------------------------------
+
+const AreasPage = () => {
+  const [newAreaName, setNewAreaName] = useState("");
+  const [editingArea, setEditingArea] = useState(null);
+
+  const queryClient = useQueryClient();
+
+  // -------------------------------------------------------------------
+  // A. USE QUERY (LECTURA DE DATOS)
+  // -------------------------------------------------------------------
+
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: QUERY_KEY,
+    queryFn: () => graphqlFetcher(GET_AREAS_QUERY),
+    select: (data) => data?.areas || [], // Manejo de null/undefined para evitar crashes
+  });
+
+  // -------------------------------------------------------------------
+  // B. USE MUTATION (ESCRITURA DE DATOS)
+  // -------------------------------------------------------------------
+
+  const saveMutation = useMutation({
+    mutationFn: (variables) => {
+      const mutation = editingArea ? UPDATE_AREA_MUTATION : CREATE_AREA_MUTATION;
+      return graphqlFetcher(mutation, variables);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      setNewAreaName("");
+      setEditingArea(null);
+    },
+    onError: (err) => {
+      console.error("Error al guardar/actualizar:", err);
+      alert(`Error: ${err.message || 'No se pudo guardar el área.'}`);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => graphqlFetcher(DELETE_AREA_MUTATION, { id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    },
+    onError: (err) => {
+      console.error("Error al eliminar:", err);
+      alert(`Error: ${err.message || 'No se pudo eliminar el área.'}`);
+    },
+  });
+
+  // -------------------------------------------------------------------
+  // 3. HANDLERS ACTUALIZADOS
+  // -------------------------------------------------------------------
 
   const handleEditClick = (area) => {
     setEditingArea(area);
     setNewAreaName(area.nombre);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    try {
-      if (editingArea) {
-        // Lógica para actualizar
-        await updateArea(editingArea.id_area, { nombre: newAreaName });
-        setEditingArea(null); // Desactivar el modo de edición
-      } else {
-        // Lógica para crear
-        await createArea({ nombre: newAreaName });
-      }
-      setNewAreaName(""); // Limpiar el input
-      fetchAreas(); // Recargar la lista
-    } catch (err) {
-      setError("No se pudo guardar el área. Intente de nuevo.");
-    }
+
+    const inputData = { nombre: newAreaName }; // Wrapper para AreaInput
+    const variables = editingArea
+      ? { id: editingArea.idArea, data: inputData }
+      : { data: inputData };
+
+    saveMutation.mutate(variables);
   };
 
-  const handleDelete = async (id) => {
-    try {
-      await deleteArea(id);
-      fetchAreas(); // Vuelve a cargar la lista después de eliminar
-    } catch (err) {
-      setError("No se pudo eliminar el área. Intente de nuevo.");
-    }
+  const handleDelete = (id) => {
+    deleteMutation.mutate(id);
   };
 
-  if (loading) {
-    return <div className="text-center mt-8">Cargando áreas...</div>;
+  // -------------------------------------------------------------------
+  // 4. ESTADOS DE CARGA Y ERROR ACTUALIZADOS
+  // -------------------------------------------------------------------
+
+  if (isLoading || saveMutation.isPending || deleteMutation.isPending) {
+    return <div className="text-center mt-8">Cargando/Procesando...</div>;
   }
 
-  if (error) {
-    return <div className="text-center mt-8 text-red-500">Error: {error}</div>;
+  if (isError) {
+    return <div className="text-center mt-8 text-red-500">Error: {error.message}</div>;
   }
 
-  // Columnas para la tabla de áreas
+  // -------------------------------------------------------------------
+  // 5. RENDERIZADO
+  // -------------------------------------------------------------------
+
   const areaColumns = [
-    { header: "ID", accessor: "id_area" },
+    { header: "ID", accessor: "idArea" },
     { header: "Nombre", accessor: "nombre" },
     {
       header: "Acciones",
@@ -86,9 +148,8 @@ const AreasPage = () => {
           >
             Editar
           </button>
-          {/* MODIFICACIÓN: Botón Eliminar con fondo rojo y texto blanco */}
           <button
-            onClick={() => handleDelete(row.id_area)}
+            onClick={() => handleDelete(row.idArea)}
             className="bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg"
           >
             Eliminar
@@ -98,7 +159,6 @@ const AreasPage = () => {
     },
   ];
 
-  // Campos para el formulario de áreas
   const areaFields = [
     {
       label: "Nombre del Área",
@@ -113,17 +173,17 @@ const AreasPage = () => {
 
   return (
     <div className="flex flex-col gap-6">
-    <h1 className="text-3xl font-bold mb-6 text-black">Administrar Áreas</h1>
-    <div className="flex flex-col md:flex-row gap-6">
-      <Table data={areas} columns={areaColumns} />
-      <Form
-        title={editingArea ? "Editar Área" : "Crear Nueva Área"}
-        fields={areaFields}
-        onSubmit={handleSubmit}
-        submitText={editingArea ? "Actualizar Área" : "Guardar Área"}
-      />
+      <h1 className="text-3xl font-bold mb-6 text-black">Administrar Áreas</h1>
+      <div className="flex flex-col md:flex-row gap-6">
+        <Table data={data} columns={areaColumns} />
+        <Form
+          title={editingArea ? "Editar Área" : "Crear Nueva Área"}
+          fields={areaFields}
+          onSubmit={handleSubmit}
+          submitText={editingArea ? "Actualizar Área" : "Guardar Área"}
+        />
+      </div>
     </div>
-  </div>
   );
 };
 
